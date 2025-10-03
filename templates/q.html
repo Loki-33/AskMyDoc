@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CChat</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<style>
+  body {
+    font-family: sans-serif;
+    background-color: #121212;
+    color: #fff;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  
+  .wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .controls {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 20px;
+    background: #2c2c2c;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #444;
+  }
+  
+  .model-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .model-selector label {
+    color: #00d1b2;
+    font-weight: bold;
+  }
+  
+  .model-selector select {
+    background: #1e1e1e;
+    color: white;
+    border: 1px solid #444;
+    padding: 8px 12px;
+    border-radius: 5px;
+    outline: none;
+    cursor: pointer;
+  }
+  
+  .model-selector select:hover {
+    border-color: #00d1b2;
+  }
+  
+  .model-info {
+    background: #333;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #ccc;
+  }
+  
+/*  .clear-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  .clear-btn:hover {
+    background: #c0392b;
+  }*/
+
+  #chat-container {
+    display: flex;
+    flex-direction: column;
+    width: 1200px;
+    height: 500px;
+    border: 1px solid #444;
+    background: #1e1e1e;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  
+  #chat-messages {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+  }
+  
+  .message {
+    margin-bottom: 10px;
+    padding: 8px;
+    border-radius: 5px;
+  }
+  
+  .message.user {
+    text-align: right;
+    color: #00d1b2;
+    background: rgba(0, 209, 178, 0.1);
+  }
+  
+  .message.bot {
+    text-align: left;
+    color: #ffdd57;
+    background: rgba(255, 221, 87, 0.1);
+  }
+  
+  #chat-form {
+    display: flex;
+    border-top: 1px solid #444;
+  }
+  
+  #message-input {
+    flex: 1;
+    padding: 15px;
+    border: none;
+    outline: none;
+    background: #2c2c2c;
+    color: white;
+    font-size: 14px;
+  }
+  
+  #message-input::placeholder {
+    color: #888;
+  }
+  
+  #send-btn {
+    background: #00d1b2;
+    color: white;
+    border: none;
+    padding: 15px 25px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: background 0.3s;
+  }
+  
+  #send-btn:hover {
+    background: #00b89c;
+  }
+  
+  #send-btn:disabled {
+    background: #666;
+    cursor: not-allowed;
+  }
+  
+  h3 {
+    margin-bottom: 20px;
+    color: #00d1b2;
+    text-align: center;
+  }
+  
+  .loading {
+    color: #ff6b6b;
+    font-style: italic;
+  }
+</style>
+<body>
+  <div class="wrapper">
+    <h3>{{ mes }}</h3>
+    
+    <!-- Model Selection Controls -->
+    <div class="controls">
+      <div class="model-selector">
+        <label for="model-select">Model:</label>
+        <select id="model-select" name="selected_model">
+          <option value="qwen-0.5b" {% if selected_model == 'qwen-0.5b' %}selected{% endif %}>
+            Qwen 0.5B (Fast)
+          </option>
+          <option value="qwen-1.5b" {% if selected_model == 'qwen-1.5b' %}selected{% endif %}>
+            Qwen 1.5B (Better Quality)
+          </option>
+          <option value="phi2" {% if selected_model == 'phi2' %}selected{% endif %}>
+            Phi-2  (Balanced)
+          </option>
+          <option value="tinyllama" {% if selected_model == 'tinyllama' %}selected{% endif %}>
+            TinyLlama (Ultra Fast)
+          </option>
+        </select>
+        <span class="model-info" id="model-info">⚡ Fast inference</span>
+      </div>
+      
+      <!-- <form method="POST" action="/clear_chat" style="display: inline;">
+        <button type="submit" class="clear-btn">Clear Chat</button>
+      </form> -->
+    </div>
+
+    <div id="chat-container">
+      <div id="chat-messages">
+        {% for msg in messages %}
+          <div class="message {{ msg['role'] }}">
+            <strong>{{ msg['role'].title() }}:</strong> {{ msg['text'] }}
+          </div>
+        {% endfor %}
+      </div>
+      
+      <form id="chat-form" action="/q" method="post">
+        <input type="hidden" name="selected_model" id="hidden-model" value="{{ selected_model or 'qwen-0.5b' }}">
+        <input type="text" name="message" id="message-input" placeholder="Type your message..." autocomplete="off" required />
+        <button type="submit" id="send-btn">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Scroll to bottom on load
+    const messagesDiv = document.getElementById("chat-messages");
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    // Model selection handling
+    const modelSelect = document.getElementById('model-select');
+    const modelInfo = document.getElementById('model-info');
+    const hiddenModel = document.getElementById('hidden-model');
+    
+    // Model information
+    const modelData = {
+      'qwen-0.5b': '⚡ Fast inference (~1-2s)',
+      'qwen-1.5b': '🧠 Better quality (~3-5s)',
+      'phi3-mini': '⚖️ Balanced performance (~2-4s)',
+      'tinyllama': '🚀 Ultra fast (~1s)'
+    };
+    
+    // Update model info when selection changes
+    modelSelect.addEventListener('change', function() {
+      const selected = this.value;
+      modelInfo.textContent = modelData[selected] || '⚡ Fast inference';
+      hiddenModel.value = selected;
+    });
+    
+    // Initialize model info
+    modelInfo.textContent = modelData[modelSelect.value] || '⚡ Fast inference';
+    
+    // Loading state management
+    const form = document.getElementById('chat-form');
+    const sendBtn = document.getElementById('send-btn');
+    const messageInput = document.getElementById('message-input');
+    
+    form.addEventListener('submit', function(e) {
+      // Show loading state
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Thinking...';
+      
+      // Add loading message immediately
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'message bot loading';
+      loadingDiv.innerHTML = '<strong>Bot:</strong> 🤔 Processing your question...';
+      loadingDiv.id = 'loading-message';
+      messagesDiv.appendChild(loadingDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+    
+    // Auto-focus on message input
+    messageInput.focus();
+    
+    // Allow Enter to submit (with Shift+Enter for new line)
+    messageInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.submit();
+      }
+    });
+  </script>
+</body>
+</html>
